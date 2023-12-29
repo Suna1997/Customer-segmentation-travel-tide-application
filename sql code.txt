@@ -1,0 +1,131 @@
+with
+  cte1 as (
+    select
+      u.user_id,
+     
+      u.gender,
+      u.has_children::INT,
+      u.married::INT,
+      u.home_country,
+      haversine_distance (
+        u.home_airport_lat,
+        u.home_airport_lon,
+        f.destination_airport_lat,
+        f.destination_airport_lon
+      ) AS h_distance,
+      f.checked_bags,
+      f.base_fare_usd,
+      h.hotel_per_room_usd,
+      s.session_id,
+      s.session_start,
+      s.session_end,
+      s.flight_booked,
+      s.hotel_booked,
+      s.cancellation,
+      s.flight_discount,
+      s.hotel_discount,
+      s.flight_discount_amount,
+      s.hotel_discount_amount,
+      
+      f.return_flight_booked,
+     
+      
+      EXTRACT(
+        YEAR
+        FROM
+          AGE (u.birthdate)
+      ) AS age
+    FROM
+      users u
+      JOIN sessions s ON u.user_id = s.user_id
+      LEFT JOIN flights f ON s.trip_id = f.trip_id 
+      LEFT JOIN hotels h ON s.trip_id = h.trip_id 
+    where
+      cast(session_start as date) >= '2023-01-04'
+    group by
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+    21
+  ),
+  cte2 as (
+    SELECT
+      user_id,
+      COUNT(DISTINCT session_id) AS total_sessions
+    FROM
+      cte1
+    GROUP BY
+      user_id
+    HAVING
+      COUNT(DISTINCT session_id) > 7
+  )
+select
+  c1.user_id,
+  
+  c1.age,
+  c1.gender,
+  c1.married,
+  c1.has_children,
+  c2.total_sessions,
+  SUM(
+    CASE
+      WHEN c1.flight_booked THEN 1
+      ELSE 0
+    END
+  ) AS total_flights_booked,
+  SUM(
+    CASE
+      WHEN c1.hotel_booked THEN 1
+      ELSE 0
+    END
+  ) AS total_hotels_booked,
+  SUM(
+    CASE
+      WHEN c1.cancellation THEN 1
+      ELSE 0
+    END
+  ) AS total_cancellations,
+  AVG(flight_discount_amount) AS average_flight_discount,
+  SUM(
+    CASE
+      WHEN flight_discount THEN 1
+      ELSE 0
+    END
+  )::FLOAT / COUNT(*) AS discount_flight_proportion,
+  AVG(
+    CASE
+      WHEN c1.hotel_discount THEN 1
+      ELSE 0
+    END
+  ) AS avg_hotel_discount,
+  AVG(c1.base_fare_usd) AS avg_base_fare_usd,
+  SUM(c1.flight_discount_amount) / NULLIF(SUM(c1.h_distance), 0) AS scaled_ads_per_km,
+  SUM(c1.checked_bags) AS total_checked_bags
+from
+  cte1 as c1
+  join cte2 as c2 on c1.user_id = c2.user_id
+group by
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+  order by 1
